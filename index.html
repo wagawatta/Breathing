@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Quiet Nose Breathing</title>
+  <style>
+    :root { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin:0; background:#0b0f14; color:#e9eef5; display:flex; min-height:100vh; }
+    .wrap { margin:auto; width:min(520px, 92vw); padding:22px; }
+    h1 { margin:0 0 10px; font-size:22px; font-weight:700; }
+    p { margin:6px 0 16px; color:#b6c2d1; line-height:1.4; }
+    .card { background:#101822; border:1px solid #1c2a3a; border-radius:16px; padding:16px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    button, select, input[type="number"] {
+      background:#162233; color:#e9eef5; border:1px solid #22354c;
+      border-radius:12px; padding:12px 14px; font-size:16px;
+    }
+    button { cursor:pointer; }
+    button.primary { background:#1d3b66; border-color:#2b568f; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .circleWrap { display:flex; justify-content:center; padding:18px 0 8px; }
+    .circle {
+      width:220px; height:220px; border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, #2f79ff, #12315c 60%, #0f1a28);
+      transform: scale(0.65);
+      transition: transform 300ms linear;
+      box-shadow: 0 0 0 2px rgba(255,255,255,.06), 0 20px 60px rgba(0,0,0,.45);
+    }
+    .phase { text-align:center; font-size:22px; font-weight:700; margin-top:6px; }
+    .sub { text-align:center; color:#b6c2d1; margin-top:4px; }
+    .stats { display:flex; justify-content:space-between; margin-top:12px; color:#b6c2d1; font-size:14px; }
+    .tiny { font-size:12px; color:#90a4bd; margin-top:10px; }
+    .toggle { display:flex; align-items:center; gap:8px; }
+    .toggle input { transform: scale(1.2); }
+    .pill { padding:6px 10px; border-radius:999px; background:#142033; border:1px solid #22354c; color:#b6c2d1; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Quiet Nose Breathing</h1>
+    <p>Two drills only. Nose-only. Relax shoulders. Tongue on roof of mouth.</p>
+
+    <div class="card">
+      <div class="row" style="align-items:center; justify-content:space-between;">
+        <div class="row" style="align-items:center;">
+          <span class="pill">Drill</span>
+          <select id="preset">
+            <option value="4-6">Extended Exhale (4 in / 6 out)</option>
+            <option value="4-8">Extended Exhale (4 in / 8 out)</option>
+            <option value="resonance">Resonance (5.5 breaths/min)</option>
+          </select>
+        </div>
+        <div class="row" style="align-items:center;">
+          <span class="pill">Minutes</span>
+          <input id="minutes" type="number" min="1" max="30" value="5" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px; align-items:center; justify-content:space-between;">
+        <label class="toggle">
+          <input id="sound" type="checkbox" checked />
+          <span>Sound cues</span>
+        </label>
+        <label class="toggle">
+          <input id="haptics" type="checkbox" />
+          <span>Vibrate cues</span>
+        </label>
+      </div>
+
+      <div class="circleWrap">
+        <div id="circle" class="circle" aria-label="breathing visual"></div>
+      </div>
+      <div id="phase" class="phase">Ready</div>
+      <div id="sub" class="sub">Pick a drill, press Start.</div>
+
+      <div class="row" style="margin-top:14px;">
+        <button id="start" class="primary">Start</button>
+        <button id="pause" disabled>Pause</button>
+        <button id="reset">Reset</button>
+      </div>
+
+      <div class="stats">
+        <div>Time left: <span id="timeLeft">05:00</span></div>
+        <div>Breaths: <span id="breaths">0</span></div>
+      </div>
+
+      <div class="tiny">
+        Tip: If nasal blockage is high today, do Sterimar first, then this.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const el = {
+    preset: document.getElementById('preset'),
+    minutes: document.getElementById('minutes'),
+    sound: document.getElementById('sound'),
+    haptics: document.getElementById('haptics'),
+    circle: document.getElementById('circle'),
+    phase: document.getElementById('phase'),
+    sub: document.getElementById('sub'),
+    start: document.getElementById('start'),
+    pause: document.getElementById('pause'),
+    reset: document.getElementById('reset'),
+    timeLeft: document.getElementById('timeLeft'),
+    breaths: document.getElementById('breaths'),
+  };
+
+  // Simple beep using WebAudio
+  let audioCtx = null;
+  function beep(freq = 660, ms = 80, gainVal = 0.05) {
+    if (!el.sound.checked) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.frequency.value = freq;
+      o.type = 'sine';
+      g.gain.value = gainVal;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      setTimeout(() => { o.stop(); }, ms);
+    } catch { /* ignore */ }
+  }
+
+  function vibrate(ms = 40) {
+    if (!el.haptics.checked) return;
+    if (navigator.vibrate) navigator.vibrate(ms);
+  }
+
+  function fmtTime(s) {
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
+  }
+
+  // Presets: [inhaleSeconds, exhaleSeconds]
+  function getPattern() {
+    const p = el.preset.value;
+    if (p === '4-6') return [4, 6];
+    if (p === '4-8') return [4, 8];
+    // Resonance ~ 5.5 breaths/min = 10.9s/breath -> split ~ 5.45/5.45
+    return [5.5, 5.5];
+  }
+
+  let timer = null;
+  let running = false;
+  let paused = false;
+
+  let totalSeconds = 300;
+  let remainingSeconds = 300;
+
+  let phase = 'inhale';      // 'inhale' | 'exhale'
+  let phaseRemaining = 0;    // seconds (float)
+  let breathsCount = 0;
+
+  function setVisual(scale, label, hint) {
+    el.circle.style.transform = `scale(${scale})`;
+    el.phase.textContent = label;
+    el.sub.textContent = hint;
+  }
+
+  function resetState() {
+    stopTimer();
+    const mins = Math.max(1, Math.min(30, Number(el.minutes.value) || 5));
+    totalSeconds = mins * 60;
+    remainingSeconds = totalSeconds;
+
+    breathsCount = 0;
+    phase = 'inhale';
+    const [inh, exh] = getPattern();
+    phaseRemaining = inh;
+
+    el.timeLeft.textContent = fmtTime(remainingSeconds);
+    el.breaths.textContent = String(breathsCount);
+    setVisual(0.65, 'Ready', 'Pick a drill, press Start.');
+    el.start.disabled = false;
+    el.pause.disabled = true;
+    el.pause.textContent = 'Pause';
+    paused = false;
+    running = false;
+  }
+
+  function stopTimer() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    paused = false;
+    el.start.disabled = true;
+    el.pause.disabled = false;
+
+    // Initialize phase timing to current preset
+    const [inh, exh] = getPattern();
+    if (phase === 'inhale') phaseRemaining = inh;
+    else phaseRemaining = exh;
+
+    setVisual(0.75, 'Inhale', 'Nose in. Silent. Easy.');
+
+    // 10Hz tick for smoother countdown on iPhone
+    const tickMs = 100;
+    timer = setInterval(() => tick(tickMs / 1000), tickMs);
+  }
+
+  function pause() {
+    if (!running) return;
+    if (!paused) {
+      paused = true;
+      el.pause.textContent = 'Resume';
+      setVisual(0.65, 'Paused', 'Relax jaw/shoulders.');
+    } else {
+      paused = false;
+      el.pause.textContent = 'Pause';
+    }
+  }
+
+  function finish() {
+    stopTimer();
+    running = false;
+    paused = false;
+    el.start.disabled = false;
+    el.pause.disabled = true;
+    el.pause.textContent = 'Pause';
+    setVisual(0.65, 'Done ✅', 'Nice. Keep it easy and quiet.');
+    beep(880, 140, 0.06);
+    vibrate(80);
+  }
+
+  function nextPhase() {
+    const [inh, exh] = getPattern();
+
+    if (phase === 'inhale') {
+      phase = 'exhale';
+      phaseRemaining = exh;
+      setVisual(0.70, 'Exhale', 'Nose out. Longer + softer.');
+      beep(520); vibrate(30);
+    } else {
+      // Completed a full breath
+      breathsCount += 1;
+      el.breaths.textContent = String(breathsCount);
+
+      phase = 'inhale';
+      phaseRemaining = inh;
+      setVisual(0.75, 'Inhale', 'Nose in. Silent. Easy.');
+      beep(660); vibrate(30);
+    }
+  }
+
+  function tick(dt) {
+    if (paused) return;
+
+    remainingSeconds = Math.max(0, remainingSeconds - dt);
+    el.timeLeft.textContent = fmtTime(Math.ceil(remainingSeconds));
+
+    phaseRemaining -= dt;
+
+    // Update visual smooth-ish
+    // Inhale expands, exhale contracts
+    const [inh, exh] = getPattern();
+    if (phase === 'inhale') {
+      const t = 1 - Math.max(0, Math.min(1, phaseRemaining / inh));
+      const scale = 0.65 + t * 0.25; // 0.65 -> 0.90
+      el.circle.style.transform = `scale(${scale})`;
+    } else {
+      const t = Math.max(0, Math.min(1, phaseRemaining / exh));
+      const scale = 0.65 + t * 0.25; // 0.90 -> 0.65
+      el.circle.style.transform = `scale(${scale})`;
+    }
+
+    if (phaseRemaining <= 0) {
+      nextPhase();
+    }
+
+    if (remainingSeconds <= 0) {
+      finish();
+    }
+  }
+
+  el.start.addEventListener('click', start);
+  el.pause.addEventListener('click', pause);
+  el.reset.addEventListener('click', resetState);
+
+  el.preset.addEventListener('change', () => {
+    if (!running) resetState();
+  });
+  el.minutes.addEventListener('change', () => {
+    if (!running) resetState();
+  });
+
+  resetState();
+})();
+</script>
+</body>
+</html>
